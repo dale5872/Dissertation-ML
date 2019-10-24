@@ -2,9 +2,10 @@ import pyodbc
 import argparse
 import os
 import nltk
-import language_tool
+import grammarbot
 from nltk.corpus import stopwords
 from nltk.tokenize import PunktSentenceTokenizer
+from grammarbot import GrammarBotClient
 
 class Error(Exception):
     """Base class for exceptions"""
@@ -94,19 +95,22 @@ def analyse():
             filt_lex_rich = len(filtered_response) / len(d[1])
             lex_rich = len(set(d[1])) / len(d[1])
 
-            tags = tag(filtered_response)
-
             #attempt to parse the response, we can see how far we get in the response before the grammar fails
             #thus, giving a numerical representation of the grammatical soundness of the response
             #(i.e., generate a percentage of the sentence that is grammatical)
-            #With this, we can use language_tool package
-            lang_tool = language_tool.LanguageTool("en-GB")
-            matches = lang_tool.check(d[1]) #check the raw text
-            grammatical_incorrectness = len(matches) / len(d[1])
+            #We can use an API for this
+
+            grammar_client = GrammarBotClient(api_key='KS9C5N3Y')
+            res = grammar_client.check(d[1])
+            incorrectness = len(res.matches)
+
+            grammatical_incorrectness = incorrectness / len(d[1])
 
             #We can get some meaning behind the responses through chunking
             #Best to tag each response, and then manually analyse the best way
             #to chunk for the best meanings using the tags
+
+            
             
             #Print the data to the screen (for debugging)
             print("ID: {}. Raw: {}".format(d[0], d[1]))
@@ -114,7 +118,6 @@ def analyse():
             print("Filtered Lexical Richness: {}".format(filt_lex_rich))
             print("Lexical Richness Difference: {}".format(lex_rich - filt_lex_rich))
             print("Grammatical Incorrectness: {}".format(grammatical_incorrectness))
-            print("Tags: {}".format(tags))
             print("\n")
         except ZeroDivisionError:
             pass
