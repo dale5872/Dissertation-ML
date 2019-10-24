@@ -67,7 +67,7 @@ class data:
                         FROM ((feedback_hub.entity\
                         INNER JOIN feedback_hub.response ON feedback_hub.response.response_id = feedback_hub.entity.response_id)\
                         INNER JOIN feedback_hub.import ON feedback_hub.import.import_id = feedback_hub.response.import_id)\
-                        WHERE feedback_hub.import.import_id = 22")
+                        WHERE feedback_hub.import.import_id = ?", args.ARG_I)
         
         rows = cursor.fetchall()
 
