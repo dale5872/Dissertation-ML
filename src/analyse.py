@@ -23,33 +23,17 @@ class ImportError(Error):
     def __init__(self, message):
         self.message = message
 
-class arguments:
-    def __init__(self):
-        self.ARG_I = None
-        self.ARG_R = None
-
-    def parseargs(self):
-        argparser = argparse.ArgumentParser(description="This script imports the data into the database for analysis")
-        argparser.add_argument("--i", default=None, help="Specifies the file to import")
-
-        #Now lets check the arguments
-        args = argparser.parse_args()
-
-        if args.i == None:
-            raise ArgumentError("File was not specified, please try again")
-        else:
-            self.ARG_I = args.i
-
-class data:
-    def __init__(self):
+class database:
+    def __init__(self, importID):
         self.conn = self.connect()
         self.listedData = []
+        self.importID = importID
 
     def connect(self):
         try:
             server = "feedback-hub.database.windows.net"
-            username = "development"
-            password = "jd*nc&cmFhQ1£dfg"
+            username = "dale"
+            password = "[REDACTED]"
             database = "FeedbackHub"
             driver= '{ODBC Driver 17 for SQL Server}'
 
@@ -60,16 +44,22 @@ class data:
             print("Could not connect to the database\nMessage: {}".format(e))
             exit(1)
 
-    def importData(self, args):
+    """ Updates the status for the current import """
+    def updateImport(self, status):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE feedbackhub.import SET status = ? WHERE import_ID = ?", status, self.importID)
+        self.conn.commit()
+
+    def fetchData(self):
         cursor = self.conn.cursor()   
         
-        print("Fetching data from database. import_id {}".format(args.ARG_I))
+        print("Fetching data from database. import_id {}".format(self.importID))
 
-        cursor.execute("SELECT feedback_hub.entity.response_id, feedback_hub.entity.raw_data, feedback_hub.entity.entity_id\
-                        FROM ((feedback_hub.entity\
-                        INNER JOIN feedback_hub.response ON feedback_hub.response.response_id = feedback_hub.entity.response_id)\
-                        INNER JOIN feedback_hub.import ON feedback_hub.import.import_id = feedback_hub.response.import_id)\
-                        WHERE feedback_hub.import.import_id = ?", args.ARG_I)
+        cursor.execute("SELECT e.response_id, e.raw_data, e.entity_id\
+                        FROM ((feedbackhub.entity AS e\
+                        INNER JOIN feedbackhub.response AS r ON r.response_id = e.response_id)\
+                        INNER JOIN feedbackhub.import AS i ON i.import_id = r.import_id)\
+                        WHERE i.import_id = ?", self.importID)
         
         rows = cursor.fetchall()
 
@@ -77,11 +67,10 @@ class data:
             self.listedData.append(response)
 
     def insertAnalysis(self, entity, stopwords, lex_rich, filt_lex_rich, lex_diff, gram_incorrectness, comp, neg, neu, pos):
+        print("Inserting response into database")
         cursor = self.conn.cursor()
-
-
-        cursor.execute("INSERT INTO feedback_hub.analysis (\
-            entity_id, stopwords, lexical_richness, stopword_lexical_richness,\
+        cursor.execute("INSERT INTO feedbackhub.analysis (\
+            entity_ID, stopwords, lexical_richness, stopword_lexical_richness,\
             lexical_richness_difference, grammatical_incorrectness,\
             sentiment_compound, sentiment_neg, sentiment_neu, sentiment_pos)\
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", str(entity), stopwords, lex_rich, filt_lex_rich, lex_diff, gram_incorrectness, comp, neg, neu, pos)
@@ -95,11 +84,12 @@ def tag(tokens):
 
     return tagged
 
-def analyse(database):
+def analyse(data):
     length = len(data.listedData)
     counter = 1
 
     for d in data.listedData:
+        print("Analysing entity {} / {}".format(counter, length))
         #We can perform some basic analysis here
         try:
             tokens = nltk.word_tokenize(d[1]) #tokenise the response
@@ -151,24 +141,25 @@ def analyse(database):
             #print("Compound: {0}, Negativity: {1}, Neutrality: {2}, Positivity: {3}".format(comp, neg, neu, pos))
             #print("\n")
 
-            percent = int((counter / length)*100)
-            sys.stdout.write('\r')
-            sys.stdout.write("[" + str(percent) + "%]")
-            sys.stdout.flush()
-
-            database.insertAnalysis(d[2], detokenize, lex_rich, filt_lex_rich, lex_diff, grammatical_incorrectness, comp, neg, neu, pos)
+            data.insertAnalysis(d[2], detokenize, lex_rich, filt_lex_rich, lex_diff, grammatical_incorrectness, comp, neg, neu, pos)
 
             counter += 1
         except ZeroDivisionError:
             pass
 
 
-args = arguments()
-args.parseargs()
+def initAnalysis(importID):
+    try:
+        print("--------------")
+        print("Begining Analysis...")
+        print("Fetching data")
+        data = database(importID)
+        data.updateImport("Importing")
+        data.fetchData()
 
-print("Importing data")
-data = data()
-data.importData(args)
+        print("Analysing data")
+        analyse(data)
 
-print("Analysing data")
-analyse(data)
+        data.updateImport("Complete")
+    except Exception:
+        data.updateImport("Failed")
