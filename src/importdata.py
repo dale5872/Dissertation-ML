@@ -23,8 +23,8 @@ class database:
         try:
             server = "feedback-hub.database.windows.net"
             username = "dale"
-            password = "EdenHazard10"
-            database = "[REDACTED]"
+            password = "[REDACTED]"
+            database = "FeedbackHub"
             driver= '{ODBC Driver 17 for SQL Server}'
 
             conn = pyodbc.connect('DRIVER='+driver+';SERVER='+server+';PORT=1433;DATABASE='+database+';UID='+username+';PWD='+ password)

@@ -25,7 +25,6 @@ class arguments:
         argparser.add_argument("--m", default=None, help="Specifies the type of file. If not specified, then attempts to get from extension")
         argparser.add_argument("--u", default=None, help="Specifies the UserID of the importer")
         argparser.add_argument("--o", default=None, help="Specifies the original filename, as this is renamed when uploaded")
-        argparser.add_argument("--i", default=None, help="Speci")
 
         #Now lets check the arguments
         args = argparser.parse_args()
