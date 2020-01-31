@@ -2,9 +2,12 @@ import os
 import sys
 import pyodbc
 import pandas as pd
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.externals.six import StringIO  
+from IPython.display import Image  
+import pydotplus
 
 DEBUG = True
 
@@ -95,6 +98,8 @@ class classifier:
         if DEBUG:
             print("Creating Training Model...")
 
+        feature_cols = ['stopword_lexical_richness', 'grammatical_incorrectness', 'lexical_richness']
+
         X = self.training_set.drop('classification', axis=1)
         Y = self.training_set['classification']
 
@@ -105,7 +110,7 @@ class classifier:
         if DEBUG:
             print("Initialising Classifier")
 
-        classifier = DecisionTreeClassifier()
+        classifier = DecisionTreeClassifier()#criterion="gini", splitter="best",max_depth=3)
         classifier.fit(X_train, Y_train)
 
         if DEBUG:
@@ -116,6 +121,15 @@ class classifier:
 
         print(confusion_matrix(Y_pred, Y_test))
         print(classification_report(Y_pred, Y_test))
+
+        #Output decision tree in visualizer
+        dot_data = StringIO()
+        export_graphviz(classifier, out_file=dot_data,  
+                filled=True, rounded=True,
+                special_characters=True,feature_names = feature_cols, class_names=['0','1'])
+        graph = pydotplus.graph_from_dot_data(dot_data.getvalue())  
+        graph.write_png('decisiontree.png')
+        Image(graph.create_png())
 
 
 def initClassifier():
