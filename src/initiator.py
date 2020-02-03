@@ -1,5 +1,6 @@
 import importdata
 import analyse
+import classifier
 import argparse
 
 class Error(Exception):
@@ -57,3 +58,5 @@ args.parseargs()
 
 importID = importdata.initImporter(args.ARG_F, args.ARG_O, args.ARG_U)
 analyse.initAnalysis(importID)
+classifier.initClassifier(importID)
+
