@@ -33,11 +33,25 @@ class database:
         except pyodbc.Error as e:
             print("Could not connect to the database\nMessage: {}".format(e))
             exit(1)
+    
+    def getResponseHeaders(self, questionnaireID):
+        cursor = self.database_conn.cursor()
+        cursor.execute("SELECT qh.header_ID \
+        FROM feedbackhub.questionnaire_headers AS qh \
+        WHERE qh.questionnaire_ID = {}".format(questionnaireID))
 
-    def createImport(self, userID, originalFilename):
+        rows = cursor.fetchall()
+        headers = []
+
+        for header in rows:
+            headers.append(header[0])
+
+        return headers
+
+    def createImport(self, userID, originalFilename, questionnaireID):
         print("Creating Import")
         cursor = self.database_conn.cursor()
-        cursor.execute("INSERT INTO feedbackhub.import (import_method, user_ID, status, filename) VALUES('csv', ?, 'Importing', ?)", userID, originalFilename)
+        cursor.execute("INSERT INTO feedbackhub.import (import_method, user_ID, status, filename, questionnaire_ID) VALUES('csv', ?, 'Importing', ?, ?)", userID, originalFilename, questionnaireID)
 
         cursor.execute("SELECT CAST(@@IDENTITY AS INT)")
         row = cursor.fetchone()
@@ -56,7 +70,10 @@ class database:
         print("Commiting import complete to database")
         self.database_conn.commit()
 
-    def addResponses(self, data):
+    def addResponses(self, data, questionnaireID):
+        headers = self.getResponseHeaders(questionnaireID)
+        print(headers)
+
         cursor = self.database_conn.cursor()
         rows = len(data)
         counter = 1
@@ -72,8 +89,10 @@ class database:
             response_id = row[0]
 
             #Now we loop through the data, and add each entity to the database
+            entity_counter = 0
             for entity in response:
-                cursor.execute("INSERT INTO feedbackhub.entity (response_id, raw_data) VALUES(?, ?)", str(response_id), entity)
+                cursor.execute("INSERT INTO feedbackhub.entity (response_id, raw_data, questionnaire_header_ID) VALUES(?, ?, ?)", str(response_id), entity, headers[entity_counter])
+                entity_counter = entity_counter + 1
 
             counter = counter + 1
         
@@ -103,15 +122,15 @@ class parseData:
             print("An error occured during parsing the CSV file.\nMessage: {}".format(e))
             exit(1)
 
-def initImporter(file, originalFilename, userID):        
+def initImporter(file, originalFilename, userID, questionnaireID):        
     # Now lets get the data
     data = parseData()
     csv_data = data.csv(file)
 
     # Finally, import into the database
     db = database()
-    db.createImport(userID, originalFilename)
-    responseNo = db.addResponses(csv_data)
+    db.createImport(userID, originalFilename, questionnaireID)
+    responseNo = db.addResponses(csv_data, questionnaireID)
     db.finishImport(responseNo)
 
     print("Data was added successfully")

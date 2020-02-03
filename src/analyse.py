@@ -159,6 +159,5 @@ def initAnalysis(importID):
         print("Analysing data")
         analyse(data)
 
-        data.updateImport("Complete")
     except Exception:
         data.updateImport("Failed")

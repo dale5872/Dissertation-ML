@@ -19,6 +19,7 @@ class arguments:
         self.ARG_M = None #Method
         self.ARG_U = None #UserID
         self.ARG_O = None #Original Filename, as reuploaded
+        self.ARG_Q = None #QuestionnaireID
 
     def parseargs(self):
         argparser = argparse.ArgumentParser(description="This script imports the data into the database for analysis")
@@ -26,6 +27,8 @@ class arguments:
         argparser.add_argument("--m", default=None, help="Specifies the type of file. If not specified, then attempts to get from extension")
         argparser.add_argument("--u", default=None, help="Specifies the UserID of the importer")
         argparser.add_argument("--o", default=None, help="Specifies the original filename, as this is renamed when uploaded")
+        argparser.add_argument("--q", default=None, help="Specifies the questionnaireID of the uploaded file")
+
 
         #Now lets check the arguments
         args = argparser.parse_args()
@@ -45,6 +48,11 @@ class arguments:
         else:
             self.ARG_O = args.o
 
+        if args.q == None:
+            raise ArgumentError("QuestionnaireID required")
+        else:
+            self.ARG_Q = args.q
+
         """
         if args.m == None:
             raise ArgumentError("Method was not specified, please try again")
@@ -56,7 +64,7 @@ class arguments:
 args = arguments()
 args.parseargs()
 
-importID = importdata.initImporter(args.ARG_F, args.ARG_O, args.ARG_U)
+importID = importdata.initImporter(args.ARG_F, args.ARG_O, args.ARG_U, args.ARG_Q)
 analyse.initAnalysis(importID)
 classifier.initClassifier(importID)
 

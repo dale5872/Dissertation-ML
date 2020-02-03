@@ -6,8 +6,8 @@ from sklearn.tree import DecisionTreeClassifier, export_graphviz
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
 from sklearn.externals.six import StringIO  
-from IPython.display import Image  
-import pydotplus
+#from IPython.display import Image  
+#import pydotplus
 
 DEBUG = True
 
@@ -33,6 +33,13 @@ class database:
         except pyodbc.Error as e:
             print("Could not connect to the database\nMessage: {}".format(e))
             exit(1)
+
+    """ Updates the status for the current import """
+    def updateImport(self, status, importID):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE feedbackhub.import SET status = ? WHERE import_ID = ?", status, importID)
+        self.conn.commit()
+
 
     def loadDataset(self, import_ID):
         global DEBUG
@@ -148,6 +155,7 @@ class classifier:
         print(confusion_matrix(Y_pred, Y_test))
         print(classification_report(Y_pred, Y_test))
 
+        """
         #Output decision tree in visualizer
         dot_data = StringIO()
         export_graphviz(self.classifier, out_file=dot_data,  
@@ -156,6 +164,7 @@ class classifier:
         graph = pydotplus.graph_from_dot_data(dot_data.getvalue())  
         graph.write_png('decisiontree.png')
         Image(graph.create_png())
+        """
 
     def classify(self, dataset):
         global DEBUG
@@ -187,17 +196,22 @@ class classifier:
 
 def initClassifier(import_ID):
     global DEBUG
+    try:
+        db = database()
+        db.updateImport("Classifying", import_ID)
+        training_set = db.loadTrainingSet()
+        dataset = db.loadDataset(import_ID)
 
-    db = database()
-    training_set = db.loadTrainingSet()
-    dataset = db.loadDataset(import_ID)
+        if DEBUG:
+            print(training_set)
 
-    if DEBUG:
-        print(training_set)
+        cl = classifier(training_set, None, db)
+        cl.trainDecisionTree()
 
-    cl = classifier(training_set, None, db)
-    cl.trainDecisionTree()
+        cl.classify(dataset)
 
-    cl.classify(dataset)
+        db.updateImport("Complete", import_ID)
+    except:
+        db.updateImport("Failed", import_ID)
 
-initClassifier(41)
+
