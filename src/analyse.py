@@ -65,14 +65,14 @@ class database:
         for response in rows:
             self.listedData.append(response)
 
-    def insertAnalysis(self, entity, stopwords, lex_rich, filt_lex_rich, lex_diff, gram_incorrectness, comp, neg, neu, pos):
+    def insertAnalysis(self, entity, stopwords, lex_rich, filt_lex_rich, lex_diff, gram_incorrectness, comp, neg, neu, pos, tokens_length):
         print("Inserting response into database")
         cursor = self.conn.cursor()
         cursor.execute("INSERT INTO feedbackhub.analysis (\
             entity_ID, stopwords, lexical_richness, stopword_lexical_richness,\
             lexical_richness_difference, grammatical_incorrectness,\
-            sentiment_compound, sentiment_neg, sentiment_neu, sentiment_pos)\
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", str(entity), stopwords, lex_rich, filt_lex_rich, lex_diff, gram_incorrectness, comp, neg, neu, pos)
+            sentiment_compound, sentiment_neg, sentiment_neu, sentiment_pos, token_length)\
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);", str(entity), stopwords, lex_rich, filt_lex_rich, lex_diff, gram_incorrectness, comp, neg, neu, pos, tokens_length)
 
         self.conn.commit()
 
@@ -92,6 +92,8 @@ def analyse(data):
         #We can perform some basic analysis here
         try:
             tokens = nltk.word_tokenize(d[1]) #tokenise the response
+
+            tokens_length = len(tokens)
 
             #Fetch the stop_words and filter them with the responbses
             stop_words = set(stopwords.words('english'))
@@ -140,7 +142,7 @@ def analyse(data):
             #print("Compound: {0}, Negativity: {1}, Neutrality: {2}, Positivity: {3}".format(comp, neg, neu, pos))
             #print("\n")
 
-            data.insertAnalysis(d[2], detokenize, lex_rich, filt_lex_rich, lex_diff, grammatical_incorrectness, comp, neg, neu, pos)
+            data.insertAnalysis(d[2], detokenize, lex_rich, filt_lex_rich, lex_diff, grammatical_incorrectness, comp, neg, neu, pos, tokens_length)
 
             counter += 1
         except ZeroDivisionError:

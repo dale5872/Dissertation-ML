@@ -9,7 +9,16 @@ from sklearn.externals.six import StringIO
 #from IPython.display import Image  
 #import pydotplus
 
-DEBUG = True
+DEBUG = False
+
+class Error(Exception):
+    """Base class for exceptions"""
+    pass
+
+class EmptyTrainingSet(Error):
+    """ Exception for empty training set """
+    def __init__(self, message):
+        self.message = message
 
 class database:
     def __init__(self):
@@ -84,28 +93,65 @@ class database:
             print("Loading Training Data")
 
         cursor = self.conn.cursor()
-        cursor.execute("SELECT convert(VARCHAR, t.stopword_lexical_richness), \
+        
+        """
+        cursor.execute("SELECT TOP 92 \
+        convert(VARCHAR, t.stopword_lexical_richness), \
         convert(VARCHAR, t.grammatical_incorrectness), \
         convert(VARCHAR, t.lexical_richness), \
         t.classification \
-        FROM feedbackhub.training_set AS T")
+         FROM feedbackhub.training_set AS t;") #Model 1
+
+        
+        cursor.execute("SELECT \
+        convert(VARCHAR, t.stopword_lexical_richness), \
+        convert(VARCHAR, t.grammatical_incorrectness), \
+        convert(VARCHAR, t.lexical_richness), \
+        t.classification \
+         FROM feedbackhub.training_set AS t;") #Model 2
+
+        """
+        cursor.execute("SELECT \
+        convert(VARCHAR, t.stopword_lexical_richness), \
+        convert(VARCHAR, t.grammatical_incorrectness), \
+        convert(VARCHAR, t.lexical_richness), \
+        convert(VARCHAR, t.sentiment_compound), \
+        t.token_length, t.classification \
+        FROM feedbackhub.training_set AS t") #Model 3
+
         rows = cursor.fetchall()
+
+        if len(rows) == 0 and DEBUG:
+            raise EmptyTrainingSet("No training set")
 
         stop_word_lexical_richness = []
         grammatical_incorrectness = []
         lexical_richness = []
+        sentiment_compound = []
+        token_length = []
         classification = []
 
+        counter = 0
         for response in rows:
             stop_word_lexical_richness.append(response[0])
             grammatical_incorrectness.append(response[1])
             lexical_richness.append(response[2])
-            classification.append(response[3])
+            #classification.append(response[3])
+
+            sentiment_compound.append(response[3])
+            token_length.append(response[4])
+            classification.append(response[5])
+            counter = counter + 1
+        
+        if DEBUG:
+            print("Loaded {} rows for training set. {} rows used for training and {} rows used for evaluation".format(counter, (counter*0.8), (counter*0.2)))
 
         training_set = {
             'stopword_lexical_richness': stop_word_lexical_richness,
             'grammatical_incorrectness': grammatical_incorrectness,
             'lexical_richness': lexical_richness,
+            'sentiment_compound': sentiment_compound,
+            'token_length': token_length,
             'classification': classification
         }
 
@@ -125,12 +171,12 @@ class classifier:
         self.classifier = None
         self.database = database
 
-    def trainDecisionTree(self):
+    def trainDecisionTree(self, TEST_FLAG):
         global DEBUG
         if DEBUG:
             print("Creating Training Model...")
 
-        feature_cols = ['stopword_lexical_richness', 'grammatical_incorrectness', 'lexical_richness']
+        feature_cols = ['stopword_lexical_richness', 'grammatical_incorrectness', 'lexical_richness', 'sentiment_compound', 'token_length']
 
         X = self.training_set.drop('classification', axis=1)
         Y = self.training_set['classification']
@@ -142,7 +188,7 @@ class classifier:
         if DEBUG:
             print("Initialising Classifier")
 
-        self.classifier = DecisionTreeClassifier()#criterion="gini", splitter="best",max_depth=3)
+        self.classifier = DecisionTreeClassifier(criterion="gini", splitter="best", max_depth=3, min_samples_split = 20, min_samples_leaf = 20)
         self.classifier.fit(X_train, Y_train)
 
         if DEBUG:
@@ -150,10 +196,19 @@ class classifier:
 
         #Lets verify the model
         Y_pred = self.classifier.predict(X_test)
-        print(Y_pred)
 
-        print(confusion_matrix(Y_pred, Y_test))
-        print(classification_report(Y_pred, Y_test))
+        matrix = confusion_matrix(Y_pred, Y_test)
+        correct = matrix[0][0] + matrix[1][1]
+        incorrect = matrix[0][1] + matrix[1][0]
+        total = correct + incorrect
+
+        accuracy = (correct / total) * 100
+
+        if TEST_FLAG:
+            print(matrix)
+            print(classification_report(Y_pred, Y_test))
+        
+        return accuracy
 
         """
         #Output decision tree in visualizer
@@ -165,6 +220,28 @@ class classifier:
         graph.write_png('decisiontree.png')
         Image(graph.create_png())
         """
+
+    def testTrainingTree(self):
+        TEST_NUMBER = 500
+
+        accuracy = 0
+        highest = 0
+        lowest = 100
+        for i in range(TEST_NUMBER):
+            current_accuracy = self.trainDecisionTree(False)
+            accuracy = accuracy + current_accuracy
+            if current_accuracy > highest:
+                highest = current_accuracy
+            if current_accuracy < lowest:
+                lowest = current_accuracy
+            print("Evaluating Model {}/{}".format(i, TEST_NUMBER))
+
+        return_value = {
+            'Average': accuracy / TEST_NUMBER,
+            'Highest': highest,
+            'Lowest': lowest
+        }
+        return return_value
 
     def classify(self, dataset):
         global DEBUG
@@ -211,7 +288,21 @@ def initClassifier(import_ID):
         cl.classify(dataset)
 
         db.updateImport("Complete", import_ID)
+    except EmptyTrainingSet as e:
+        #Do nothing
+        db.updateImport("Failed", import_ID)
     except:
         db.updateImport("Failed", import_ID)
 
+def evaluateClassifier():
+    db = database()
+    training_set = db.loadTrainingSet()
 
+    cl = classifier(training_set, None, db)
+
+    print("Results: {}%".format(cl.testTrainingTree()))
+
+    #accuracy = cl.trainDecisionTree(True)
+    #print("{}%".format(accuracy))
+
+evaluateClassifier()
