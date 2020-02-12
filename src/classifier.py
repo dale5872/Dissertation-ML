@@ -9,7 +9,8 @@ from sklearn.externals.six import StringIO
 #from IPython.display import Image  
 #import pydotplus
 
-DEBUG = False
+DEBUG = True
+TEST_FLAG = False
 
 class Error(Exception):
     """Base class for exceptions"""
@@ -57,7 +58,8 @@ class database:
             print("Loading Live Data")
 
         cursor = self.conn.cursor()
-        cursor.execute("SELECT a.entity_ID, a.stopword_lexical_richness, a.grammatical_incorrectness, a.lexical_richness \
+        cursor.execute("SELECT a.entity_ID, a.stopword_lexical_richness, a.grammatical_incorrectness, a.lexical_richness, \
+        a.sentiment_compound, a.token_length \
         FROM (((feedbackhub.analysis AS a \
             INNER JOIN feedbackhub.entity AS e ON a.entity_ID = e.entity_ID) \
             INNER JOIN feedbackhub.response AS r ON r.response_ID = e.response_ID) \
@@ -70,18 +72,24 @@ class database:
         stop_word_lexical_richness = []
         grammatical_incorrectness = []
         lexical_richness = []
+        sentiment_compound = []
+        token_length = []
 
         for entity in rows:
             entityID.append(entity[0])
             stop_word_lexical_richness.append(entity[1])
             grammatical_incorrectness.append(entity[2])
             lexical_richness.append(entity[3])
+            sentiment_compound.append(entity[4])
+            token_length.append(entity[5])
 
         dataset = {
             'entityID': entityID,
             'stopword_lexical_richness': stop_word_lexical_richness,
             'grammatical_incorrectness': grammatical_incorrectness,
-            'lexical_richness': lexical_richness
+            'lexical_richness': lexical_richness,
+            'sentiment_compound': sentiment_compound,
+            'token_length': token_length
         }
 
         return pd.DataFrame(dataset)
@@ -171,8 +179,8 @@ class classifier:
         self.classifier = None
         self.database = database
 
-    def trainDecisionTree(self, TEST_FLAG):
-        global DEBUG
+    def trainDecisionTree(self):
+        global DEBUG, TEST_FLAG
         if DEBUG:
             print("Creating Training Model...")
 
@@ -283,7 +291,25 @@ def initClassifier(import_ID):
             print(training_set)
 
         cl = classifier(training_set, None, db)
-        cl.trainDecisionTree()
+
+        if DEBUG:
+            print("Creating Deccision Tree. Finding tree with 90+ accuracy")
+        accuracy = 0
+        tree_counter = 0
+        """
+        We want an accurate decision tree, while the majority of decision trees
+        created will be 90%+ accurate, occasionally we may face a tree that is as low
+        as 75% accurate. Thus, we will only use trees that are 90% accurate.
+        However, as this could be very CPU intensive, we will only try 5 times
+        """
+        while accuracy < 89 and tree_counter < 5:
+            if DEBUG:
+                print("TREE ACCURACY {}%".format(accuracy))
+            accuracy = cl.trainDecisionTree()
+            tree_counter = tree_counter + 1
+
+        if DEBUG:
+            print("Found tree with {}% Accuracy".format(accuracy))
 
         cl.classify(dataset)
 
@@ -291,8 +317,9 @@ def initClassifier(import_ID):
     except EmptyTrainingSet as e:
         #Do nothing
         db.updateImport("Failed", import_ID)
-    except:
+    except Exception as e:
         db.updateImport("Failed", import_ID)
+        print(e)
 
 def evaluateClassifier():
     db = database()
@@ -301,8 +328,8 @@ def evaluateClassifier():
     cl = classifier(training_set, None, db)
 
     print("Results: {}%".format(cl.testTrainingTree()))
+    accuracy = cl.trainDecisionTree()
+    print("{}%".format(accuracy))
 
-    #accuracy = cl.trainDecisionTree(True)
-    #print("{}%".format(accuracy))
-
-evaluateClassifier()
+if TEST_FLAG:
+    evaluateClassifier()
