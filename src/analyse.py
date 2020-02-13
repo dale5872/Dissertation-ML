@@ -76,6 +76,11 @@ class database:
 
         self.conn.commit()
 
+    def insertTokens(self, tokens, entityID):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE feedbackhub.entity SET tokens = ? WHERE entity_id = ?", tokens, entityID)
+        self.conn.commit()
+
 def tag(tokens):
     tagged = []
     for t in tokens:
@@ -92,7 +97,6 @@ def analyse(data):
         #We can perform some basic analysis here
         try:
             tokens = nltk.word_tokenize(d[1]) #tokenise the response
-
             tokens_length = len(tokens)
 
             #Fetch the stop_words and filter them with the responbses
@@ -104,6 +108,7 @@ def analyse(data):
                 detokenize += f
                 detokenize += " "
             
+            data.insertTokens(detokenize, d[2]) #d[2] is entity id
             #calculate the lexical richness of raw and filtered data
             filt_lex_rich = len(filtered_response) / len(d[1])
             lex_rich = len(set(d[1])) / len(d[1])
@@ -144,9 +149,31 @@ def analyse(data):
 
             data.insertAnalysis(d[2], detokenize, lex_rich, filt_lex_rich, lex_diff, grammatical_incorrectness, comp, neg, neu, pos, tokens_length)
 
-            counter += 1
         except ZeroDivisionError:
             pass
+        except Exception as e:
+            print(e)
+            exit(1)
+
+        counter += 1
+
+def determineSimilarEntities(data):
+    counter = 0
+    data_length = len(data.listedData)
+
+    for d in data.listedData:
+        d_counter = counter
+        while d_counter < data_length:
+            
+            venn_a = set(d.split())
+            venn_b = set(d.listedData[d_counter])
+            venn_intersection = venn_a.intersection(venn_b)
+
+            similarity = (float(len(venn_intersection)) / (len(venn_a) + len(venn_b) - len(venn_intersection))) * 100
+            print("SIMILARITY {}%".format(similarity))
+
+
+        counter = counter + 1
 
 
 def initAnalysis(importID):
@@ -160,6 +187,10 @@ def initAnalysis(importID):
 
         print("Analysing data")
         analyse(data)
+        determineSimilarEntities(data)
 
     except Exception:
         data.updateImport("Failed")
+
+
+initAnalysis(80)
