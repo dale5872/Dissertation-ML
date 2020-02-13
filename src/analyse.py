@@ -6,6 +6,7 @@ import grammarbot
 from nltk.corpus import stopwords
 from nltk.tokenize import PunktSentenceTokenizer
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+from nltk.stem import PorterStemmer
 from grammarbot import GrammarBotClient
 
 class Error(Exception):
@@ -66,7 +67,7 @@ class database:
             self.listedData.append(response)
 
     def insertAnalysis(self, entity, stopwords, lex_rich, filt_lex_rich, lex_diff, gram_incorrectness, comp, neg, neu, pos, tokens_length):
-        print("Inserting response into database")
+        #print("Inserting response into database")
         cursor = self.conn.cursor()
         cursor.execute("INSERT INTO feedbackhub.analysis (\
             entity_ID, stopwords, lexical_richness, stopword_lexical_richness,\
@@ -81,6 +82,12 @@ class database:
         cursor.execute("UPDATE feedbackhub.entity SET tokens = ? WHERE entity_id = ?", tokens, entityID)
         self.conn.commit()
 
+    def insertSimilarity(self, entityID1, entityID2, similarity):
+        print("INERTING {} {} ".format(entityID1, entityID2))
+        cursor = self.conn.cursor()
+        cursor.execute("INSERT INTO feedbackhub.similarities (entityID1, entityID2, similarity) VALUES (?, ?, ?)", entityID1, entityID2, similarity)
+        self.conn.commit()
+
 def tag(tokens):
     tagged = []
     for t in tokens:
@@ -91,6 +98,8 @@ def tag(tokens):
 def analyse(data):
     length = len(data.listedData)
     counter = 1
+
+    stopword_array = []
 
     for d in data.listedData:
         print("Analysing entity {} / {}".format(counter, length))
@@ -109,6 +118,7 @@ def analyse(data):
                 detokenize += " "
             
             data.insertTokens(detokenize, d[2]) #d[2] is entity id
+            stopword_array.append([d[2], tokens])
             #calculate the lexical richness of raw and filtered data
             filt_lex_rich = len(filtered_response) / len(d[1])
             lex_rich = len(set(d[1])) / len(d[1])
@@ -157,24 +167,43 @@ def analyse(data):
 
         counter += 1
 
-def determineSimilarEntities(data):
-    counter = 0
-    data_length = len(data.listedData)
+    return stopword_array
 
-    for d in data.listedData:
+def determineSimilarEntities(stopword_array):
+    print("Processing similarities")
+
+    counter = 0
+    data_length = len(stopword_array)
+
+    for d in stopword_array:
         d_counter = counter
+    
+        #get stem word
+        stem_a = getStemWords(d[1])
+        venn_a = set(stem_a)
+
+        #assess similarity
         while d_counter < data_length:
-            
-            venn_a = set(d.split())
-            venn_b = set(d.listedData[d_counter])
+            stem_b = getStemWords(stopword_array[d_counter][1])
+            venn_b = set(stem_b)
             venn_intersection = venn_a.intersection(venn_b)
 
             similarity = (float(len(venn_intersection)) / (len(venn_a) + len(venn_b) - len(venn_intersection))) * 100
-            print("SIMILARITY {}%".format(similarity))
 
+            data.insertSimilarity(d[0], stopword_array[d_counter][0], similarity)
+
+            d_counter += 1
 
         counter = counter + 1
 
+def getStemWords(sentence):
+    ps = PorterStemmer()
+    stems = []
+
+    for w in sentence:
+        stems.append(ps.stem(w))
+
+    return stems
 
 def initAnalysis(importID):
     try:
@@ -186,11 +215,8 @@ def initAnalysis(importID):
         data.fetchData()
 
         print("Analysing data")
-        analyse(data)
-        determineSimilarEntities(data)
+        stopword_array = analyse(data)
+        determineSimilarEntities(stopword_array)
 
     except Exception:
         data.updateImport("Failed")
-
-
-initAnalysis(80)
