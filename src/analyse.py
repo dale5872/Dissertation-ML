@@ -42,7 +42,7 @@ class database:
             return conn
         except pyodbc.Error as e:
             print("Could not connect to the database\nMessage: {}".format(e))
-            exit(1)
+            raise e
 
     """ Updates the status for the current import """
     def updateImport(self, status):
@@ -82,10 +82,9 @@ class database:
         cursor.execute("UPDATE feedbackhub.entity SET tokens = ? WHERE entity_id = ?", tokens, entityID)
         self.conn.commit()
 
-    def insertSimilarity(self, entityID1, entityID2, similarity):
-        print("INERTING {} {} ".format(entityID1, entityID2))
+    def insertSimilarity(self, entityID, similarities):
         cursor = self.conn.cursor()
-        cursor.execute("INSERT INTO feedbackhub.similarities (entityID1, entityID2, similarity) VALUES (?, ?, ?)", entityID1, entityID2, similarity)
+        cursor.execute("INSERT INTO feedbackhub.similarities (entityID, similarities) VALUES (?, ?);", entityID, similarities)
         self.conn.commit()
 
 def tag(tokens):
@@ -118,7 +117,7 @@ def analyse(data):
                 detokenize += " "
             
             data.insertTokens(detokenize, d[2]) #d[2] is entity id
-            stopword_array.append([d[2], tokens])
+            stopword_array.append([d[2], filtered_response])
             #calculate the lexical richness of raw and filtered data
             filt_lex_rich = len(filtered_response) / len(d[1])
             lex_rich = len(set(d[1])) / len(d[1])
@@ -169,30 +168,44 @@ def analyse(data):
 
     return stopword_array
 
-def determineSimilarEntities(stopword_array):
-    print("Processing similarities")
-
+def determineSimilarEntities(data, stopword_array):
     counter = 0
     data_length = len(stopword_array)
+    print("Processing similarities. Data_length{}".format(data_length))
 
+    similarities_arr = []
     for d in stopword_array:
-        d_counter = counter
+        #if after removing stopwords the token list is empty then just skip
+        if len(d[1]) < 3: #not worth looking at
+            continue
+            
+        d_counter = counter 
     
         #get stem word
         stem_a = getStemWords(d[1])
         venn_a = set(stem_a)
 
         #assess similarity
+        similarities = 0
         while d_counter < data_length:
+            if len(stopword_array[d_counter][1]) < 3: #not worth looking at
+                d_counter += 1
+                continue
+
             stem_b = getStemWords(stopword_array[d_counter][1])
             venn_b = set(stem_b)
             venn_intersection = venn_a.intersection(venn_b)
 
             similarity = (float(len(venn_intersection)) / (len(venn_a) + len(venn_b) - len(venn_intersection))) * 100
 
-            data.insertSimilarity(d[0], stopword_array[d_counter][0], similarity)
+            if similarity > 15 and similarity < 100: #we need < 100 as we don't want to match it against itself
+                print("Similarity {} >> \n {}. >> \n Accuracy: {} \n".format(d[1], stopword_array[d_counter][1], similarity))
+                similarities += 1
 
             d_counter += 1
+        
+        #similarities_map.append([d[0], similarities])
+        data.insertSimilarity(d[0], similarities)
 
         counter = counter + 1
 
@@ -216,7 +229,11 @@ def initAnalysis(importID):
 
         print("Analysing data")
         stopword_array = analyse(data)
-        determineSimilarEntities(stopword_array)
+        determineSimilarEntities(data, stopword_array)
 
-    except Exception:
+    except Exception as e:
         data.updateImport("Failed")
+        raise e
+        
+
+

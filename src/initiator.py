@@ -61,10 +61,13 @@ class arguments:
         """
 
 # Parse arguments
-args = arguments()
-args.parseargs()
+try:
+    args = arguments()
+    args.parseargs()
 
-importID = importdata.initImporter(args.ARG_F, args.ARG_O, args.ARG_U, args.ARG_Q)
-analyse.initAnalysis(importID)
-classifier.initClassifier(importID)
-
+    importID = importdata.initImporter(args.ARG_F, args.ARG_O, args.ARG_U, args.ARG_Q)
+    analyse.initAnalysis(importID)
+    classifier.initClassifier(importID)
+except Exception as e:
+    print(e)
+    exit(1)
