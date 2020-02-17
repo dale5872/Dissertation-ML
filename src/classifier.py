@@ -94,7 +94,7 @@ class database:
 
         return pd.DataFrame(dataset)
 
-    def loadTrainingSet(self):
+    def loadDefaultTrainingSet(self):
         global DEBUG
 
         if DEBUG:
@@ -132,6 +132,35 @@ class database:
         if len(rows) == 0 and DEBUG:
             raise EmptyTrainingSet("No training set")
 
+        return self.formatTrainingData(rows)
+
+    def loadTrainingSet(self, userID):
+        global DEBUG
+
+        if DEBUG:
+            print("Loading User Based Training Data")
+
+        cursor = self.conn.cursor()
+
+        cursor.execute("SELECT a.stopword_lexical_richness, a.grammatical_incorrectness, a.lexical_richness, a.sentiment_compound, a.token_length, c.classification \
+            FROM (((((feedbackhub.analysis AS a \
+                INNER JOIN feedbackhub.classifications AS c ON a.entity_ID = c.entity_ID) \
+                    INNER JOIN feedbackhub.entity AS e ON e.entity_ID = a.entity_ID) \
+                        INNER JOIN feedbackhub.response AS r ON r.response_ID = e.response_ID) \
+                            INNER JOIN feedbackhub.import AS i ON r.import_ID = i.import_ID) \
+                                INNER JOIN feedbackhub.user_accounts AS u ON u.user_ID = i.user_ID) \
+            WHERE u.user_ID = {};".format(userID))
+
+        rows = cursor.fetchall()
+
+        if len(rows) == 0:
+            if DEBUG:
+                print("User has no training data, loading defualt training set")
+            return self.loadDataset
+        
+        return self.formatTrainingData(rows)
+
+    def formatTrainingData(self, rows):
         stop_word_lexical_richness = []
         grammatical_incorrectness = []
         lexical_richness = []
@@ -165,7 +194,7 @@ class database:
 
         #We now need to turn this into a dataframe and return it
         return pd.DataFrame(training_set)
-    
+
     def insertClassification(self, entity_ID, classification):
         cursor = self.conn.cursor()
         cursor.execute("INSERT INTO feedbackhub.classifications (entity_ID, classification) VALUES(?, ?)", int(entity_ID), int(classification))
