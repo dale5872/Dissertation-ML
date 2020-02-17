@@ -308,12 +308,12 @@ class classifier:
         print(joinedClassifications)
         return joinedClassifications
 
-def initClassifier(import_ID):
+def initClassifier(import_ID, userID):
     global DEBUG
     try:
         db = database()
         db.updateImport("Classifying", import_ID)
-        training_set = db.loadTrainingSet()
+        training_set = db.loadTrainingSet(userID)
         dataset = db.loadDataset(import_ID)
 
         if DEBUG:
