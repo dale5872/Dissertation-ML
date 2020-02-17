@@ -2,6 +2,7 @@ import importdata
 import analyse
 import classifier
 import argparse
+import traceback
 
 class Error(Exception):
     """Base class for exceptions"""
@@ -70,4 +71,5 @@ try:
     classifier.initClassifier(importID, args.ARG_U)
 except Exception as e:
     print(e)
+    traceback.print_exec()
     exit(1)

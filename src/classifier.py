@@ -156,7 +156,7 @@ class database:
         if len(rows) == 0:
             if DEBUG:
                 print("User has no training data, loading defualt training set")
-            return self.loadDataset
+            return self.loadDefaultTrainingSet()
         
         return self.formatTrainingData(rows)
 
