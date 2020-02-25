@@ -122,6 +122,21 @@ class parseData:
             print("An error occured during parsing the CSV file.\nMessage: {}".format(e))
             exit(1)
 
+    def singleResponse(self, data):
+        try:
+            print(data)
+            csv_reader = csv.reader([data], delimiter=',')
+            responses = []
+
+            for row in csv_reader:
+                responses.append(row)
+            
+            print(responses)
+            return responses
+        except UnicodeDecodeError as e:
+            print("An error occured during parsing the CSV file.\nMessage: {}".format(e))
+            exit(1)
+
 def initImporter(file, originalFilename, userID, questionnaireID):        
     # Now lets get the data
     data = parseData()
@@ -136,3 +151,13 @@ def initImporter(file, originalFilename, userID, questionnaireID):
     print("Data was added successfully")
 
     return db.import_id
+
+def insertSingleResponse(raw_data, questionnaireID, importID):
+    data = parseData()
+    csv_data = data.singleResponse(raw_data)
+
+    db = database()
+    db.setImportID(importID)
+    db.addResponses(csv_data, questionnaireID)
+
+    print("Response added successfully")
