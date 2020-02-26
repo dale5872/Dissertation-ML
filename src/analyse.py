@@ -26,7 +26,6 @@ class ImportError(Error):
 class database:
     def __init__(self, importID):
         self.conn = self.connect()
-        self.listedData = []
         self.importID = importID
 
     def connect(self):
@@ -50,7 +49,7 @@ class database:
         cursor.execute("UPDATE feedbackhub.import SET status = ? WHERE import_ID = ?", status, self.importID)
         self.conn.commit()
 
-    def fetchData(self):
+    def fetchData(self, analysed):
         cursor = self.conn.cursor()   
         
         print("Fetching data from database. import_id {}".format(self.importID))
@@ -59,12 +58,15 @@ class database:
                         FROM ((feedbackhub.entity AS e\
                         INNER JOIN feedbackhub.response AS r ON r.response_id = e.response_id)\
                         INNER JOIN feedbackhub.import AS i ON i.import_id = r.import_id)\
-                        WHERE i.import_id = ?", self.importID)
+                        WHERE i.import_id = ? AND e.analysed = ?", self.importID, analysed)
         
         rows = cursor.fetchall()
 
+        listedData = []
         for response in rows:
-            self.listedData.append(response)
+            listedData.append(response)
+
+        return listedData
 
     def insertAnalysis(self, entity, stopwords, lex_rich, filt_lex_rich, lex_diff, gram_incorrectness, comp, neg, neu, pos, tokens_length):
         #print("Inserting response into database")
@@ -83,9 +85,15 @@ class database:
         self.conn.commit()
 
     def insertSimilarity(self, entityID, similarities):
-        cursor = self.conn.cursor()
-        cursor.execute("INSERT INTO feedbackhub.similarities (entityID, similarities) VALUES (?, ?);", entityID, similarities)
-        self.conn.commit()
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("INSERT INTO feedbackhub.similarities (entityID, similarities) VALUES (?, ?);", entityID, similarities)
+            self.conn.commit()
+        except pyodbc.IntegrityError as e:
+            cursor = self.conn.cursor()
+            cursor.execute("UPDATE feedbackhub.similarities SET similarities = ? WHERE entityID = ?;",similarities,  entityID)
+            self.conn.commit()
+
 
 def tag(tokens):
     tagged = []
@@ -94,13 +102,13 @@ def tag(tokens):
 
     return tagged
 
-def analyse(data):
-    length = len(data.listedData)
+def analyse(data, listedData):
+    length = len(listedData)
     counter = 1
 
     stopword_array = []
 
-    for d in data.listedData:
+    for d in listedData:
         print("Analysing entity {} / {}".format(counter, length))
         #We can perform some basic analysis here
         try:
@@ -168,10 +176,23 @@ def analyse(data):
 
     return stopword_array
 
+def getStopwords(listedData):
+    stopword_array = []
+
+    for d in listedData:
+        tokens = nltk.word_tokenize(d[1]) #tokenise the response
+        stop_words = set(stopwords.words('english'))
+        filtered_response = [w for w in tokens if not w in stop_words]            
+        stopword_array.append([d[2], filtered_response])
+
+    return stopword_array
+
+
 def determineSimilarEntities(data, stopword_array):
     counter = 0
     data_length = len(stopword_array)
-    print("Processing similarities. Data_length{}".format(data_length))
+    print("Processing similarities")
+    print(stopword_array)
 
     similarities_arr = []
     for d in stopword_array:
@@ -225,10 +246,18 @@ def initAnalysis(importID):
         print("Fetching data")
         data = database(importID)
         data.updateImport("Importing")
-        data.fetchData()
+        analysed_data = data.fetchData(1)
+        unanalysed_data = data.fetchData(0)
+
 
         print("Analysing data")
-        stopword_array = analyse(data)
+        stopword_array = analyse(data, unanalysed_data)
+        analysed_data_stop_words = getStopwords(analysed_data)
+
+        if len(analysed_data_stop_words) > 0:
+            for d in analysed_data_stop_words:
+                stopword_array.append(d)
+
         determineSimilarEntities(data, stopword_array)
 
     except Exception as e:

@@ -19,12 +19,14 @@ class arguments:
         self.ARG_D = None #Original Filename, as reuploaded
         self.ARG_Q = None #QuestionnaireID
         self.ARG_I = None #ImportID
+        self.ARG_U = None #UserID
 
     def parseargs(self):
         argparser = argparse.ArgumentParser(description="This script imports the data into the database for analysis")
         argparser.add_argument("--d", default=None, help="Specifies the data to insert, in csv format")
         argparser.add_argument("--q", default=None, help="Specifies the questionnaireID")
         argparser.add_argument("--i", default=None, help="Specifies the importID of the questionnaire")
+        argparser.add_argument("--u", default=None, help="Specifies the UserID of the importer")
 
 
         #Now lets check the arguments
@@ -45,6 +47,11 @@ class arguments:
         else:
             self.ARG_I = args.i
 
+        if args.u == None:
+            raise ArgumentError("UserID was not specified. Please specify a UserID")
+        else:
+            self.ARG_U = args.u
+
 
         """
         if args.m == None:
@@ -59,7 +66,9 @@ try:
     args.parseargs()
 
     importdata.insertSingleResponse(args.ARG_D, args.ARG_Q, args.ARG_I)
-
+    analyse.initAnalysis(args.ARG_I)
+    classifier.initClassifier(args.ARG_I, args.ARG_U)
+    exit(0)
 except Exception as e:
     print(e)
     traceback.print_exec()

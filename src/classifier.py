@@ -4,7 +4,7 @@ import pyodbc
 import pandas as pd
 from sklearn.tree import DecisionTreeClassifier, export_graphviz
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn.externals.six import StringIO  
 #from IPython.display import Image  
 #import pydotplus
@@ -50,6 +50,15 @@ class database:
         cursor.execute("UPDATE feedbackhub.import SET status = ? WHERE import_ID = ?", status, importID)
         self.conn.commit()
 
+    def updateResponses(self, importID):
+        cursor = self.conn.cursor()
+        cursor.execute("UPDATE e \
+        SET e.analysed = 1 \
+        FROM feedbackhub.entity AS e  \
+            INNER JOIN feedbackhub.response AS r ON e.response_ID = r.response_ID \
+                INNER JOIN feedbackhub.import AS i ON r.import_ID = ?",importID)
+        self.conn.commit()
+
 
     def loadDataset(self, import_ID):
         global DEBUG
@@ -64,7 +73,7 @@ class database:
             INNER JOIN feedbackhub.entity AS e ON a.entity_ID = e.entity_ID) \
             INNER JOIN feedbackhub.response AS r ON r.response_ID = e.response_ID) \
             INNER JOIN feedbackhub.import AS i ON i.import_ID = r.import_ID) \
-        WHERE i.import_ID = {};".format(import_ID))
+        WHERE i.import_ID = {} AND e.analysed = 0;".format(import_ID))
 
         rows = cursor.fetchall()
 
@@ -153,7 +162,7 @@ class database:
 
         rows = cursor.fetchall()
 
-        if len(rows) == 0:
+        if len(rows) < 250:
             if DEBUG:
                 print("User has no training data, loading defualt training set")
             return self.loadDefaultTrainingSet()
@@ -234,12 +243,13 @@ class classifier:
         #Lets verify the model
         Y_pred = self.classifier.predict(X_test)
 
-        matrix = confusion_matrix(Y_pred, Y_test)
-        correct = matrix[0][0] + matrix[1][1]
-        incorrect = matrix[0][1] + matrix[1][0]
-        total = correct + incorrect
+        if DEBUG:
+            print("Calculating Accuracy")
 
-        accuracy = (correct / total) * 100
+        accuracy = accuracy_score(Y_pred, Y_test) * 100
+
+        if DEBUG:
+            print("Accuracy: {}%".format(accuracy))
 
         if TEST_FLAG:
             print(matrix)
@@ -342,6 +352,7 @@ def initClassifier(import_ID, userID):
 
         cl.classify(dataset)
 
+        db.updateResponses(import_ID)
         db.updateImport("Complete", import_ID)
     except EmptyTrainingSet as e:
         #Do nothing

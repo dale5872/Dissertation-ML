@@ -19,6 +19,9 @@ class database:
         self.database_conn = self.connect()
         self.import_id = 0
 
+    def setImportID(self, importID):
+        self.import_id = importID
+
     def connect(self):
         try:
             server = "feedback-hub.database.windows.net"
