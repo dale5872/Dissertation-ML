@@ -3,6 +3,7 @@ import os
 import sys
 import nltk
 import grammarbot
+import language_check
 from nltk.corpus import stopwords
 from nltk.tokenize import PunktSentenceTokenizer
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
@@ -107,7 +108,7 @@ def analyse(data, listedData):
     counter = 1
 
     stopword_array = []
-
+    print(listedData)
     for d in listedData:
         print("Analysing entity {} / {}".format(counter, length))
         #We can perform some basic analysis here
@@ -138,9 +139,10 @@ def analyse(data, listedData):
             #We can use an API for this
 
             # This is slow but can hopefully find new API for this
-            grammar_client = GrammarBotClient(api_key='KS9C5N3Y')
-            res = grammar_client.check(d[1])
-            incorrectness = len(res.matches)
+            #grammar_client = GrammarBotClient(api_key='KS9C5N3Y')
+            ltool = language_check.LanguageTool('en-GB')
+            matches = ltool.check(d[1])
+            incorrectness = len(matches)
 
             grammatical_incorrectness = incorrectness / len(d[1])
 
@@ -169,9 +171,7 @@ def analyse(data, listedData):
         except ZeroDivisionError:
             pass
         except Exception as e:
-            print(e)
-            exit(1)
-
+            raise e
         counter += 1
 
     return stopword_array
